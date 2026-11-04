@@ -31,7 +31,7 @@ export default function Padron({ padron, setPadron, onImportado }) {
             <button onClick={() => setPadron([{ id: nuevoId(), apellido: '', nombre: '', lp: '' }, ...padron])}>+ Agente</button>
             <button onClick={exportar}>Exportar backup</button>
             <button onClick={() => archivo.current.click()}>Importar</button>
-            <input ref={archivo} type="file" accept=".json" hidden onChange={importar} />
+            <input ref={archivo} type="file" accept=".json,application/json,text/plain,*/*" hidden onChange={importar} />
           </div>
         </header>
         <p className="ayuda">Los datos quedan guardados en este navegador. Para pasarlos a otro dispositivo (o a Luna), exportá el backup y que lo importe.</p>
