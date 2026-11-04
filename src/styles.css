@@ -99,6 +99,8 @@ input.alerta { background: var(--alerta-bg); border-color: var(--alerta); }
 @media (max-width: 700px) { .fila-extra { grid-template-columns: 1fr 1fr; } .fila-extra .picker { grid-column: 1 / -1; } }
 .ayuda { color: var(--gris); font-size: 12px; margin: 0 0 8px; }
 .vacio-msg { color: var(--gris); font-style: italic; }
+.pegar { display: grid; gap: 8px; margin-bottom: 12px; padding: 10px; background: var(--celeste2); border-radius: 8px; }
+.pegar textarea { background: #fff; border-color: var(--borde); font: 12px ui-monospace, monospace; }
 .buscar { border-color: var(--borde); margin-bottom: 8px; max-width: 320px; }
 .padron .tabla input { color: var(--tinta); font-weight: 600; }
 

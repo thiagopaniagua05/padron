@@ -3,6 +3,9 @@ import { nuevoId, exportarTodo, importarTodo } from '../storage'
 
 export default function Padron({ padron, setPadron, onImportado }) {
   const [filtro, setFiltro] = useState('')
+  const [pegar, setPegar] = useState(false)
+  const [texto, setTexto] = useState('')
+  const [copiado, setCopiado] = useState(false)
   const archivo = useRef()
   const upd = (id, patch) => setPadron(padron.map((a) => (a.id === id ? { ...a, ...patch } : a)))
   const lista = padron
@@ -22,6 +25,23 @@ export default function Padron({ padron, setPadron, onImportado }) {
     e.target.value = ''
   }
 
+  // Backup como texto: para mandarlo por WhatsApp como mensaje (el celular no abre archivos .json)
+  const copiarTexto = async () => {
+    const txt = JSON.stringify(exportarTodo())
+    try { await navigator.clipboard.writeText(txt) } catch {
+      const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove()
+    }
+    setCopiado(true); setTimeout(() => setCopiado(false), 2000)
+  }
+  const importarTexto = () => {
+    const t = texto.trim()
+    const ini = t.search(/[[{]/), fin = Math.max(t.lastIndexOf('}'), t.lastIndexOf(']'))
+    try {
+      importarTodo(JSON.parse(t.slice(ini, fin + 1)))
+      onImportado(); setTexto(''); setPegar(false); alert('Backup importado.')
+    } catch { alert('El texto pegado no es un backup válido. Fijate de copiar el mensaje completo.') }
+  }
+
   return (
     <div className="padron">
       <section className="card">
@@ -29,12 +49,23 @@ export default function Padron({ padron, setPadron, onImportado }) {
           <h3>Padrón de agentes ({padron.length})</h3>
           <div className="acciones">
             <button onClick={() => setPadron([{ id: nuevoId(), apellido: '', nombre: '', lp: '' }, ...padron])}>+ Agente</button>
-            <button onClick={exportar}>Exportar backup</button>
-            <button onClick={() => archivo.current.click()}>Importar</button>
+            <button onClick={copiarTexto}>{copiado ? '✓ Copiado' : 'Copiar backup (texto)'}</button>
+            <button onClick={() => setPegar(!pegar)}>Pegar backup</button>
+            <button onClick={exportar}>Exportar archivo</button>
+            <button onClick={() => archivo.current.click()}>Importar archivo</button>
             <input ref={archivo} type="file" accept=".json,application/json,text/plain,*/*" hidden onChange={importar} />
           </div>
         </header>
-        <p className="ayuda">Los datos quedan guardados en este navegador. Para pasarlos a otro dispositivo (o a Luna), exportá el backup y que lo importe.</p>
+        <p className="ayuda">Los datos quedan guardados en este navegador. Para pasarlos a otro celular: <b>Copiar backup</b>, mandalo como mensaje de WhatsApp, y en el otro celular copiá el mensaje y usá <b>Pegar backup</b>.</p>
+        {pegar && (
+          <div className="pegar">
+            <textarea rows={5} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Pegá acá el mensaje con el backup…" autoFocus />
+            <div className="acciones">
+              <button className="primario" disabled={!texto.trim()} onClick={importarTexto}>Importar</button>
+              <button onClick={() => { setPegar(false); setTexto('') }}>Cancelar</button>
+            </div>
+          </div>
+        )}
         <input className="buscar" placeholder="Buscar por apellido o LP…" value={filtro} onChange={(e) => setFiltro(e.target.value)} />
         <table className="tabla">
           <thead><tr><th>Apellido</th><th>Nombre</th><th>LP</th><th></th></tr></thead>
