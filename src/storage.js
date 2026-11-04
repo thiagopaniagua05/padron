@@ -27,3 +27,16 @@ export function importarTodo(data) {
 }
 
 export const nuevoId = () => Math.random().toString(36).slice(2, 10)
+
+/** Última asignación conocida (días anteriores a `fecha`): agente → {cam, hs} y móvil → hs */
+export function historial(fecha) {
+  const agentes = {}, cams = {}
+  for (const f of fechasGuardadas().filter((x) => x < fecha)) {
+    const d = cargarDia(f); if (!d) continue
+    for (const fila of Object.values(d.filas || {})) {
+      if (fila.cam && fila.hs) cams[fila.cam] = fila.hs
+      for (const id of fila.agentes || []) if (id) agentes[id] = { cam: fila.cam || '', hs: fila.hs || '' }
+    }
+  }
+  return { agentes, cams }
+}

@@ -3,12 +3,11 @@ import Planilla from './components/Planilla'
 import Extras from './components/Extras'
 import Partes from './components/Partes'
 import Padron from './components/Padron'
-import { ListaAgentes } from './components/AgentePicker'
 import { diaVacio, resumen as calcResumen, nombreCompleto } from './logic'
-import { cargarPadron, guardarPadron, cargarDia, guardarDia, fechasGuardadas, nuevoId } from './storage'
+import { cargarPadron, guardarPadron, cargarDia, guardarDia, fechasGuardadas, nuevoId, historial } from './storage'
 
 const hoy = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10) }
-const TABS = [['planilla', 'Planilla'], ['extras', 'Ausentes y otros'], ['partes', 'Partes WhatsApp'], ['padron', 'Padrón']]
+const TABS = [['planilla', 'Planilla', 'Planilla'], ['extras', 'Ausentes y otros', 'Ausentes'], ['partes', 'Partes WhatsApp', 'WhatsApp'], ['padron', 'Padrón', 'Padrón']]
 
 export default function App() {
   const [padron, setPadronState] = useState(cargarPadron)
@@ -25,6 +24,7 @@ export default function App() {
   const setFila = (key, patch) => setDia((d) => ({ ...d, filas: { ...d.filas, [key]: { ...(d.filas[key] || {}), ...patch } } }))
 
   const resumen = useMemo(() => calcResumen(dia), [dia])
+  const hist = useMemo(() => historial(fecha), [fecha])
 
   // Alta rápida desde cualquier selector: "PEREZ JUAN" → pide el LP
   const onNuevo = (txt, elegir) => {
@@ -59,12 +59,11 @@ export default function App() {
     resumen.camsRepetidas.length && `Móvil repetido: ${resumen.camsRepetidas.join(', ')}`,
     resumen.agentesRepetidos.length && `Agente en dos móviles: ${resumen.agentesRepetidos.map((id) => nombreCompleto(padron.find((a) => a.id === id))).join(', ')}`,
     resumen.sinHora.length && `Sin horario: ${resumen.sinHora.join(', ')}`,
-    resumen.sinAgente.length && `Zonas sin cubrir: ${resumen.sinAgente.join(', ')}`,
+    resumen.enCalle > 0 && resumen.sinAgente.length && (resumen.sinAgente.length > 6 ? `${resumen.sinAgente.length} zonas sin cubrir` : `Zonas sin cubrir: ${resumen.sinAgente.join(', ')}`),
   ].filter(Boolean)
 
   return (
     <div className="app">
-      <ListaAgentes padron={padron} />
       <header className="top">
         <div className="marca">
           <h1>Salida de Móviles</h1>
@@ -85,9 +84,9 @@ export default function App() {
       </header>
 
       <nav className="tabs">
-        {TABS.map(([k, l]) => (
+        {TABS.map(([k, l, corto]) => (
           <button key={k} className={tab === k ? 'activo' : ''} onClick={() => setTab(k)}>
-            {l}{k === 'extras' && dia.ausentes.length + dia.otros.length ? ` (${dia.ausentes.length + dia.otros.length})` : ''}
+            <span className="largo">{l}</span><span className="corto">{corto}</span>{k === 'extras' && dia.ausentes.length + dia.otros.length ? ` (${dia.ausentes.length + dia.otros.length})` : ''}
           </button>
         ))}
         <span className="contador">{resumen.enCalle} en calle</span>
@@ -98,7 +97,7 @@ export default function App() {
       )}
 
       <main>
-        {tab === 'planilla' && <Planilla dia={dia} padron={padron} set={set} setFila={setFila} resumen={resumen} onNuevo={onNuevo} />}
+        {tab === 'planilla' && <Planilla dia={dia} padron={padron} set={set} setFila={setFila} resumen={resumen} hist={hist} onNuevo={onNuevo} />}
         {tab === 'extras' && <Extras dia={dia} set={set} padron={padron} onNuevo={onNuevo} />}
         {tab === 'partes' && <Partes dia={dia} padron={padron} />}
         {tab === 'padron' && <Padron padron={padron} setPadron={setPadron} onImportado={() => { setPadronState(cargarPadron()); setDiaState(cargarDia(fecha) || diaVacio(fecha)) }} />}

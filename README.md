@@ -10,7 +10,7 @@ Stack: React 18 + Vite, `pdf-lib` para el PDF, Vercel Routing Middleware para la
 ## Uso
 
 1. **Padrón**: se carga una sola vez (apellido, nombre, LP). Desde cualquier selector se puede dar de alta a un agente nuevo con el botón `+`.
-2. **Planilla**: por cada zona se elige el agente (escribiendo el apellido o el LP), el número de móvil y el horario.
+2. **Planilla**: por cada zona se busca al agente. Se puede escribir parte del apellido, del nombre o del LP, en cualquier orden. Al elegirlo se completan solos el móvil y la hora que usó la última vez (solo si esos campos están vacíos). Si cargás el móvil a mano, la hora se completa con la última que tuvo ese móvil.
    - Las filas **SUP.** admiten dos agentes.
    - Las filas **REF.** y **ZONA** tienen un texto de zona (ej. `14 A 18 BIS`, `BERMUDEZ`, `13`).
    - Cuando se ocupan las tres filas ZONA aparece una cuarta, hasta un máximo de ocho. En el PDF, las que no entran a la izquierda se imprimen en las filas libres de abajo a la derecha.

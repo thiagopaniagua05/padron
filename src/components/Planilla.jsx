@@ -4,8 +4,8 @@ import { FILAS, TURNOS, fila, usada } from '../logic'
 
 function HsSelect({ value, onChange }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={value ? '' : 'vacio'}>
-      <option value="">–</option>
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={value ? '' : 'vacio'} aria-label="Horario">
+      <option value="">Hs</option>
       {TURNOS.map((t) => <option key={t} value={t}>{t}</option>)}
     </select>
   )
@@ -13,17 +13,37 @@ function HsSelect({ value, onChange }) {
 
 const placeholderZona = { sup: 'SUPERVISOR', ref: 'ej. 14 A 18 BIS', extra: 'ej. 13 / BERMÚDEZ' }
 
-export default function Planilla({ dia, padron, setFila, set, resumen, onNuevo }) {
-  const agentes = (def, f) => {
-    const n = def.dos ? 2 : 1
-    return Array.from({ length: n }, (_, i) => (
-      <AgentePicker key={i} value={f.agentes[i] || ''} padron={padron} onNuevo={onNuevo}
-        placeholder={i ? '2° agente (opcional)' : 'Agente…'}
-        onChange={(id) => { const a = [...f.agentes]; a[i] = id; setFila(def.key, { agentes: a }) }} />
-    ))
+export default function Planilla({ dia, padron, setFila, set, resumen, hist, onNuevo }) {
+  // Al elegir el agente: completa móvil y hora con lo último que usó (solo si están vacíos)
+  const elegirAgente = (def, f, i, id) => {
+    const agentes = [...f.agentes]; agentes[i] = id
+    const patch = { agentes }
+    const prev = id && i === 0 ? hist.agentes[id] : null
+    if (prev) {
+      if (!f.cam && prev.cam) patch.cam = prev.cam
+      if (!f.hs && (prev.hs || hist.cams[patch.cam || f.cam])) patch.hs = prev.hs || hist.cams[patch.cam || f.cam]
+    }
+    setFila(def.key, patch)
   }
+  // Al cargar el móvil a mano: si la hora está vacía, usa la última hora de ese móvil
+  const salirCam = (def, f) => { if (f.cam && !f.hs && hist.cams[f.cam]) setFila(def.key, { hs: hist.cams[f.cam] }) }
 
-  // Filas "ZONA" extra: se muestran 3 y se agrega una más cuando se usan todas (hasta 8)
+  const agentes = (def, f) => (
+    <div className="ags">
+      {Array.from({ length: def.dos ? 2 : 1 }, (_, i) => (
+        <AgentePicker key={i} value={f.agentes[i] || ''} padron={padron} onNuevo={onNuevo}
+          placeholder={i ? '2° agente (opcional)' : 'Buscar agente…'}
+          onChange={(id) => elegirAgente(def, f, i, id)} />
+      ))}
+    </div>
+  )
+
+  const cam = (def, f) => (
+    <input className={'cam' + (resumen.camsRepetidas.includes(f.cam) ? ' alerta' : '')} inputMode="numeric" placeholder="Móvil"
+      value={f.cam} onChange={(e) => setFila(def.key, { cam: e.target.value.replace(/\D/g, '') })} onBlur={() => salirCam(def, f)} />
+  )
+
+  // Filas "ZONA" extra: se muestran 3 y aparece una más cuando se usan todas (hasta 8)
   const extras = FILAS.filter((d) => d.kind === 'extra')
   const ultimaUsada = extras.reduce((m, d, i) => (usada(fila(dia, d.key)) ? i : m), -1)
   const visibles = new Set(extras.slice(0, Math.max(3, ultimaUsada + 2)).map((d) => d.key))
@@ -33,26 +53,25 @@ export default function Planilla({ dia, padron, setFila, set, resumen, onNuevo }
   return (
     <div className="planilla">
       <section className="tabla-wrap">
-        <table className="tabla">
+        <table className="tabla izq">
           <thead><tr><th>Zona</th><th>Agente</th><th>Cam. Nº</th><th>Hs</th><th>P.Pol.</th></tr></thead>
           <tbody>
             {izq.map((def) => {
               const f = fila(dia, def.key)
-              const vacia = def.kind === 'zona' && resumen.sinAgente.includes(def.label.replace(' ', '').toUpperCase())
+              const vacia = resumen.enCalle > 0 && def.kind === 'zona' && resumen.sinAgente.includes(def.label.replace(' ', '').toUpperCase())
               return (
-                <tr key={def.key} className={vacia ? 'fila-vacia' : ''}>
+                <tr key={def.key} className={(vacia ? 'fila-vacia ' : '') + (usada(f) ? 'llena' : '')}>
                   <th className="zona">
-                    {def.label}
+                    <span>{def.label}</span>
                     {placeholderZona[def.kind] && (
                       <input className="zona-txt" value={f.zonaTxt} placeholder={placeholderZona[def.kind]}
                         onChange={(e) => setFila(def.key, { zonaTxt: e.target.value })} />
                     )}
                   </th>
-                  <td className="ag">{agentes(def, f)}</td>
-                  <td><input className={'cam' + (resumen.camsRepetidas.includes(f.cam) ? ' alerta' : '')} inputMode="numeric" value={f.cam}
-                    onChange={(e) => setFila(def.key, { cam: e.target.value.trim() })} /></td>
-                  <td><HsSelect value={f.hs} onChange={(hs) => setFila(def.key, { hs })} /></td>
-                  <td><input className="ppol" value={f.ppol} placeholder="—" onChange={(e) => setFila(def.key, { ppol: e.target.value })} /></td>
+                  <td className="c-ag">{agentes(def, f)}</td>
+                  <td className="c-cam">{cam(def, f)}</td>
+                  <td className="c-hs"><HsSelect value={f.hs} onChange={(hs) => setFila(def.key, { hs })} /></td>
+                  <td className="c-pp"><input className="ppol" value={f.ppol} placeholder="P.Pol." onChange={(e) => setFila(def.key, { ppol: e.target.value })} /></td>
                 </tr>
               )
             })}
@@ -62,7 +81,7 @@ export default function Planilla({ dia, padron, setFila, set, resumen, onNuevo }
 
       <section className="derecha">
         <div className="tabla-wrap">
-          <table className="tabla">
+          <table className="tabla der">
             <thead><tr><th></th><th>Agente</th><th>Cam. Nº</th><th>Hs</th><th>Zonas</th><th>P.Pol.</th></tr></thead>
             <tbody>
               {der.map((def, i) => {
@@ -71,13 +90,13 @@ export default function Planilla({ dia, padron, setFila, set, resumen, onNuevo }
                 return (
                   <Fragment key={def.key}>
                     {titulo && <tr className="sub"><td colSpan={6}>{def.kind === 'qth' ? 'Móviles en QTH fijo' : 'Móviles de refuerzo'}</td></tr>}
-                    <tr>
-                      <th className="zona chico">{i + 1}</th>
-                      <td className="ag">{agentes(def, f)}</td>
-                      <td><input className={'cam' + (resumen.camsRepetidas.includes(f.cam) ? ' alerta' : '')} inputMode="numeric" value={f.cam} onChange={(e) => setFila(def.key, { cam: e.target.value.trim() })} /></td>
-                      <td><HsSelect value={f.hs} onChange={(hs) => setFila(def.key, { hs })} /></td>
-                      <td><input value={f.zonas} placeholder="ej. 6/7/9/10" onChange={(e) => setFila(def.key, { zonas: e.target.value })} /></td>
-                      <td><input className="ppol" value={f.ppol} placeholder="—" onChange={(e) => setFila(def.key, { ppol: e.target.value })} /></td>
+                    <tr className={usada(f) ? 'llena' : ''}>
+                      <th className="zona chico"><span>{def.kind === 'qth' ? 'QTH' : 'REF'}</span></th>
+                      <td className="c-ag">{agentes(def, f)}</td>
+                      <td className="c-cam">{cam(def, f)}</td>
+                      <td className="c-hs"><HsSelect value={f.hs} onChange={(hs) => setFila(def.key, { hs })} /></td>
+                      <td className="c-zonas"><input value={f.zonas} placeholder="Zonas: 6/7/9/10" onChange={(e) => setFila(def.key, { zonas: e.target.value })} /></td>
+                      <td className="c-pp"><input className="ppol" value={f.ppol} placeholder="P.Pol." onChange={(e) => setFila(def.key, { ppol: e.target.value })} /></td>
                     </tr>
                   </Fragment>
                 )
