@@ -1,3 +1,5 @@
+import { migrar } from './logic.js'
+
 // Guardado local en el navegador. Para compartir entre dispositivos: Exportar / Importar backup.
 const K = { padron: 'sm:padron', dia: (f) => 'sm:dia:' + f }
 
@@ -6,7 +8,7 @@ const escribir = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } 
 
 export const cargarPadron = () => leer(K.padron, [])
 export const guardarPadron = (p) => escribir(K.padron, p)
-export const cargarDia = (fecha) => leer(K.dia(fecha), null)
+export const cargarDia = (fecha) => migrar(leer(K.dia(fecha), null))
 export const guardarDia = (d) => escribir(K.dia(d.fecha), d)
 
 export function fechasGuardadas() {
@@ -26,16 +28,16 @@ export function importarTodo(data) {
   Object.values(data.dias || {}).forEach((d) => d?.fecha && guardarDia(d))
 }
 
-export const nuevoId = () => Math.random().toString(36).slice(2, 10)
+export { nuevoId } from './logic.js'
 
-/** Última asignación conocida (días anteriores a `fecha`): agente → {cam, hs} y móvil → hs */
+/** Última asignación conocida (días anteriores a `fecha`): agente → {cam, zona} y móvil → zona */
 export function historial(fecha) {
   const agentes = {}, cams = {}
   for (const f of fechasGuardadas().filter((x) => x < fecha)) {
     const d = cargarDia(f); if (!d) continue
-    for (const fila of Object.values(d.filas || {})) {
-      if (fila.cam && fila.hs) cams[fila.cam] = fila.hs
-      for (const id of fila.agentes || []) if (id) agentes[id] = { cam: fila.cam || '', hs: fila.hs || '' }
+    for (const m of d.moviles || []) {
+      if (m.cam && m.zona) cams[m.cam] = m.zona
+      m.agentes.forEach((a, i) => { if (a.id && i === 0) agentes[a.id] = { cam: m.cam || '', zona: m.zona || '' } })
     }
   }
   return { agentes, cams }

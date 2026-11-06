@@ -9,17 +9,18 @@ Stack: React 18 + Vite, `pdf-lib` para el PDF, Vercel Routing Middleware para la
 
 ## Uso
 
-1. **Padrón**: se carga una sola vez (apellido, nombre, LP). Desde cualquier selector se puede dar de alta a un agente nuevo con el botón `+`.
-2. **Planilla**: por cada zona se busca al agente. Se puede escribir parte del apellido, del nombre o del LP, en cualquier orden. Al elegirlo se completan solos el móvil y la hora que usó la última vez (solo si esos campos están vacíos). Si cargás el móvil a mano, la hora se completa con la última que tuvo ese móvil.
-   - Las filas **SUP.** admiten dos agentes.
-   - Las filas **REF.** y **ZONA** tienen un texto de zona (ej. `14 A 18 BIS`, `BERMUDEZ`, `13`).
-   - Cuando se ocupan las tres filas ZONA aparece una cuarta, hasta un máximo de ocho. En el PDF, las que no entran a la izquierda se imprimen en las filas libres de abajo a la derecha.
-   - **QTH fijo / Refuerzo**: la columna *Zonas* se imprime en la columna P.POL. del PDF y arma el texto "REFUERZO 6/7/9/10" del parte.
-3. **Ausentes y otros**: ausentes con su motivo, recepción y personal afectado a otro sector. Todo esto se agrega solo a las observaciones del PDF y a los partes.
-4. **Copiar día anterior**: copia los móviles, las zonas, el supervisor y el auxiliar del último día guardado. Así solo se corrigen los cambios.
-5. **Generar PDF** / pestaña **Partes WhatsApp** (copiar o abrir en WhatsApp).
+1. **Pegar**: se copia el parte de WhatsApp (uno o los 4 turnos juntos), se pega y se toca *Cargar*. La app lee los móviles, la zona, los agentes con su LP, el oficial de policía, los ausentes con el motivo, la recepción y el personal afectado. Si un agente no está en el padrón, lo agrega. Si el parte es de otra fecha, pregunta en qué día cargarlo. Volver a pegar un turno reemplaza lo cargado de ese turno.
+2. **Móviles**: hay una tarjeta por móvil, agrupadas por turno como en el parte. Cada tarjeta tiene el móvil, la zona (una lista con las zonas, UVG, SUPERVISOR, LIBRE, REFUERZO con sus zonas, QTH fijo u otra), la hora, uno o más agentes (el 2° se puede marcar como *Adicional*, que no suma en F.P) y el oficial de policía. Una zona puede tener varios móviles.
+3. **Otros**: ausentes, recepción, personal afectado, back-up, fuera de servicio, rotas y observaciones.
+4. **Partes**: el texto de cada turno para copiar o mandar por WhatsApp, con los totales calculados.
+5. **Generar planilla PDF**: la app reparte sola los móviles en la plantilla:
+   - Cada zona numerada va en su fila.
+   - UVG va en las filas UVG, y SUPERVISOR / LIBRE en las filas SUP.
+   - Los refuerzos van primero en *Móviles de refuerzo* y después en la fila REF.
+   - Los segundos móviles de una zona, BERMUDEZ, CUADRANTE, etc. van en las filas ZONA y después en las filas libres de abajo a la derecha.
+   - Si dos agentes van en un móvil, salen como "VALLE - RAMIREZ".
 
-La app avisa de móviles repetidos, agentes en dos móviles, filas sin horario y zonas sin cubrir.
+La app avisa de móviles repetidos, agentes en dos móviles, móviles sin zona, zonas sin cubrir y móviles que no entran en la plantilla. Los días guardados con la versión anterior se convierten solos.
 
 ### Datos
 

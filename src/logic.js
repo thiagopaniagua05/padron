@@ -1,40 +1,66 @@
-// Filas de la planilla, en el mismo orden que la plantilla PDF.
-// side: 'L' = tabla izquierda (zonas), 'R' = tabla derecha (QTH fijo / refuerzos)
-// pdfRow: índice de fila en la grilla del PDF (0 = fila "1")
-const zonas = ['1', '2', '3', '4', '5', '5 Bis', '6', '7', '8', '9', '10', '11', '12', '13', '13 Bis',
-  '14', '14 Bis', '15', '15 Bis', '16', '17', '18', '18 Bis', '19', '19 Bis', '20', '20 Bis']
-
-export const FILAS = [
-  ...zonas.map((z, i) => ({ key: 'Z' + z.replace(' ', ''), label: z, side: 'L', kind: 'zona', pdfRow: i })),
-  { key: 'UVG1', label: 'UVG', side: 'L', kind: 'uvg', pdfRow: 27 },
-  { key: 'UVG2', label: 'UVG', side: 'L', kind: 'uvg', pdfRow: 28 },
-  { key: 'SUP1', label: 'SUP.', side: 'L', kind: 'sup', pdfRow: 29, dos: true },
-  { key: 'SUP2', label: 'SUP.', side: 'L', kind: 'sup', pdfRow: 30, dos: true },
-  { key: 'REF', label: 'REF.', side: 'L', kind: 'ref', pdfRow: 31 },
-  { key: 'X1', label: 'ZONA', side: 'L', kind: 'extra', pdfRow: 32 },
-  { key: 'X2', label: 'ZONA', side: 'L', kind: 'extra', pdfRow: 33 },
-  { key: 'X3', label: 'ZONA', side: 'L', kind: 'extra', pdfRow: 34 },
-  // Extras que no entran a la izquierda: se imprimen en las filas libres de abajo a la derecha
-  ...[4, 5, 6, 7, 8].map((n, i) => ({ key: 'X' + n, label: 'ZONA', side: 'L', kind: 'extra', pdfRow: 27 + i, pdfSide: 'R' })),
-  { key: 'QTH1', label: 'QTH fijo', side: 'R', kind: 'qth', pdfRow: 1 },
-  { key: 'QTH2', label: 'QTH fijo', side: 'R', kind: 'qth', pdfRow: 2 },
-  { key: 'RFZ1', label: 'Refuerzo', side: 'R', kind: 'refz', pdfRow: 4 },
-  { key: 'RFZ2', label: 'Refuerzo', side: 'R', kind: 'refz', pdfRow: 5 },
-  { key: 'RFZ3', label: 'Refuerzo', side: 'R', kind: 'refz', pdfRow: 6 },
-]
+// Modelo del día: una lista de móviles (como el parte de WhatsApp).
+// Cada móvil: { id, cam, hs, zona, agentes: [{ id, nota }], ppol }
+// La ubicación en la planilla PDF se calcula sola (ver ubicar()).
 
 export const TURNOS = ['6:00', '7:00', '8:00', '9:00']
 export const MOTIVOS = ['Carpeta médica', 'Vacaciones', 'Ausente sin aviso', 'Suspensión', 'Franco', 'Licencia', 'Art. / Otro']
+export const ZONAS_NUM = ['1', '2', '3', '4', '5', '5BIS', '6', '7', '8', '9', '10', '11', '12', '13', '13BIS',
+  '14', '14BIS', '15', '15BIS', '16', '17', '18', '18BIS', '19', '19BIS', '20', '20BIS']
+// Opciones del selector de zona (las que llevan detalle muestran un campo extra)
+export const ZONAS_OPC = [...ZONAS_NUM, 'UVG', 'SUPERVISOR', 'LIBRE', 'BERMUDEZ', 'CUADRANTE', 'REFUERZO', 'QTH FIJO', 'OTRA']
+export const CON_DETALLE = { REFUERZO: '¿Qué zonas? ej. 17 A 20', 'QTH FIJO': '¿Dónde? ej. MAIPÚ', OTRA: 'Escribí la zona' }
 
-export const filaVacia = () => ({ agentes: [], cam: '', hs: '', ppol: '', zonaTxt: '', zonas: '' })
+const sinAcentos = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+export const norm = (s) => sinAcentos(s).toUpperCase().replace(/[^A-Z0-9/ ]+/g, ' ').replace(/\s+/g, ' ').trim()
+export const nuevoId = () => Math.random().toString(36).slice(2, 10)
+
+/** Normaliza el texto de zona: "Refuerzo.2/3" → "REFUERZO 2/3", "5 bis" → "5BIS" */
+export function normZona(z) {
+  let s = sinAcentos(z).toUpperCase().replace(/[.,;:]/g, ' ').replace(/\)/g, '/').replace(/\s+/g, ' ').trim()
+  s = s.replace(/(\d+)\s+BIS\b/g, '$1BIS')
+  if (/^ZONA\s+/.test(s)) s = s.replace(/^ZONA\s+/, '')
+  return s
+}
+
+/** Clasifica una zona: num (1..20BIS), uvg, sup, ref, qth, otra */
+export function tipoZona(z) {
+  const s = normZona(z)
+  if (ZONAS_NUM.includes(s)) return { tipo: 'num', base: s, det: '' }
+  if (s === 'UVG') return { tipo: 'uvg', base: 'UVG', det: '' }
+  if (s === 'SUPERVISOR' || s === 'SUP' || s === 'LIBRE') return { tipo: 'sup', base: s === 'SUP' ? 'SUPERVISOR' : s, det: '' }
+  if (s.startsWith('REFUERZO')) return { tipo: 'ref', base: 'REFUERZO', det: s.slice(8).trim() }
+  if (s.startsWith('QTH')) return { tipo: 'qth', base: 'QTH FIJO', det: s.replace(/^QTH( FIJO)?/, '').trim() }
+  if (s === 'BERMUDEZ' || s === 'CUADRANTE') return { tipo: 'otra', base: s, det: '' }
+  return { tipo: 'otra', base: s ? 'OTRA' : '', det: s }
+}
+
+export const movilVacio = (hs) => ({ id: nuevoId(), cam: '', hs, zona: '', agentes: [{ id: '', nota: '' }], ppol: '' })
 
 export const diaVacio = (fecha) => ({
-  fecha, supervisor: '', auxiliar: '', rotas: '', backup: '', sinAgentes: '', fueraServicio: '', obs: '',
-  filas: {}, ausentes: [], otros: [],
+  v: 2, fecha, supervisor: '', auxiliar: '', rotas: '', backup: '', sinAgentes: '', fueraServicio: '', obs: '',
+  moviles: [], ausentes: [], otros: [],
 })
 
-export const fila = (dia, key) => ({ ...filaVacia(), ...(dia.filas[key] || {}) })
-export const usada = (f) => !!(f.cam || f.agentes.some(Boolean))
+/** Convierte días guardados con la versión anterior (filas fijas) al formato nuevo */
+export function migrar(d) {
+  if (!d || d.moviles) return d
+  const moviles = []
+  for (const [key, f] of Object.entries(d.filas || {})) {
+    const agentes = (f.agentes || []).filter(Boolean).map((id) => ({ id, nota: '' }))
+    if (!f.cam && !agentes.length) continue
+    let zona = ''
+    if (key.startsWith('Z')) zona = key.slice(1).toUpperCase()
+    else if (key.startsWith('UVG')) zona = 'UVG'
+    else if (key.startsWith('SUP')) zona = f.zonaTxt || 'SUPERVISOR'
+    else if (key === 'REF') zona = 'REFUERZO ' + (f.zonaTxt || '')
+    else if (key.startsWith('X')) zona = f.zonaTxt || ''
+    else if (key.startsWith('QTH')) zona = f.zonas ? 'REFUERZO ' + f.zonas : 'QTH FIJO'
+    else if (key.startsWith('RFZ')) zona = 'REFUERZO ' + (f.zonas || '')
+    moviles.push({ id: nuevoId(), cam: f.cam || '', hs: f.hs || '', zona: normZona(zona), agentes: agentes.length ? agentes : [{ id: '', nota: '' }], ppol: f.ppol || '' })
+  }
+  const { filas, ...resto } = d
+  return { ...diaVacio(d.fecha), ...resto, v: 2, moviles }
+}
 
 export const nombreCompleto = (a) => a ? `${a.apellido} ${a.nombre}`.trim() : ''
 export const pad2 = (n) => String(n).padStart(2, '0')
@@ -42,118 +68,147 @@ export const fechaLarga = (iso) => { const [y, m, d] = iso.split('-'); return `$
 export const fechaCorta = (iso) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}` }
 const hora2 = (hs) => pad2(hs.split(':')[0]) + ':00'
 const finTurno = (hs) => pad2((+hs.split(':')[0] + 12) % 24) + ':00'
+const esAdicional = (ag) => /ADICIONAL/i.test(ag.nota || '')
+export const sinPersonal = (pp) => !pp || /^\s*(sin personal|s\/?n|-)\s*$/i.test(pp)
 
-/** Zona tal como aparece en el parte de WhatsApp */
-export function zonaParte(def, f) {
-  switch (def.kind) {
-    case 'zona': return def.label.replace(' ', '').toUpperCase()
-    case 'uvg': return 'UVG'
-    case 'sup': return (f.zonaTxt || 'SUPERVISOR').toUpperCase()
-    case 'ref': return ('REFUERZO ' + (f.zonaTxt || '')).trim().toUpperCase()
-    case 'extra': return (f.zonaTxt || 'S/Z').toUpperCase()
-    default: return ('REFUERZO ' + (f.zonas || '')).trim().toUpperCase()
+export const movilUsado = (m) => !!(m.cam || m.agentes.some((a) => a.id))
+
+// ---------------------------------------------------------------------------
+// Ubicación automática en la planilla PDF
+// ---------------------------------------------------------------------------
+// Lugares de la plantilla. fila = índice de fila de la grilla; lado L/R
+const L = (fila, extra = {}) => ({ lado: 'L', fila, ...extra })
+const R = (fila, extra = {}) => ({ lado: 'R', fila, ...extra })
+const LUGARES = {
+  num: Object.fromEntries(ZONAS_NUM.map((z, i) => [z, L(i)])),
+  uvg: [L(27), L(28)],
+  sup: [L(29), L(30)],
+  refDer: [R(4, { col: 'zonas' }), R(5, { col: 'zonas' }), R(6, { col: 'zonas' })],
+  qth: [R(1, { col: 'zonas' }), R(2, { col: 'zonas' })],
+  refIzq: [L(31, { conZona: true })],
+  zona: [L(32, { conZona: true }), L(33, { conZona: true }), L(34, { conZona: true })],
+  abajo: [27, 28, 29, 30, 31].map((f) => R(f, { col: 'hs', conZona: true })),
+}
+
+/** Devuelve [{ lugar, m }] y la lista de móviles que no entraron en la plantilla */
+export function ubicar(dia) {
+  const usados = new Set()
+  const libre = (lista) => lista.find((l) => !usados.has(l))
+  const out = [], sinLugar = []
+  const poner = (m, ...listas) => {
+    for (const lista of listas) { const l = libre(lista); if (l) { usados.add(l); out.push({ lugar: l, m }); return } }
+    sinLugar.push(m)
   }
+  const moviles = [...dia.moviles].filter(movilUsado)
+    .sort((a, b) => TURNOS.indexOf(a.hs) - TURNOS.indexOf(b.hs))
+  const pendientes = []
+  // 1° pasada: cada zona numerada a su fila (la primera que llega)
+  for (const m of moviles) {
+    const t = tipoZona(m.zona)
+    if (t.tipo === 'num' && !usados.has(LUGARES.num[t.base])) { usados.add(LUGARES.num[t.base]); out.push({ lugar: LUGARES.num[t.base], m }) }
+    else pendientes.push(m)
+  }
+  const resto = [LUGARES.zona, LUGARES.abajo]
+  for (const m of pendientes) {
+    const t = tipoZona(m.zona)
+    if (t.tipo === 'uvg') poner(m, LUGARES.uvg, ...resto)
+    else if (t.tipo === 'sup') poner(m, LUGARES.sup, ...resto)
+    else if (t.tipo === 'ref') poner(m, LUGARES.refDer, LUGARES.refIzq, ...resto)
+    else if (t.tipo === 'qth') poner(m, LUGARES.qth, ...resto)
+    else poner(m, ...resto, LUGARES.refIzq) // 2° móvil en una zona, BERMUDEZ, CUADRANTE, etc.
+  }
+  return { ubicados: out, sinLugar }
 }
 
-/** Todas las filas cargadas, con su definición */
-export const filasUsadas = (dia) =>
-  FILAS.map((def) => ({ def, f: fila(dia, def.key) })).filter(({ f }) => usada(f))
-
-/** Resumen general del día (para la planilla PDF y la pantalla) */
+// ---------------------------------------------------------------------------
+// Resumen y avisos
+// ---------------------------------------------------------------------------
 export function resumen(dia) {
-  const usadas = filasUsadas(dia)
-  const porHora = Object.fromEntries(TURNOS.map((t) => [t, usadas.filter(({ f }) => f.hs === t && f.cam).map(({ f }) => f.cam)]))
-  const sinAgente = FILAS.filter((d) => d.kind === 'zona' && !usada(fila(dia, d.key)))
-    .map((d) => d.label.replace(' ', '').toUpperCase())
-  // Una zona cubierta por una fila "ZONA" extra (ej. "13") no se cuenta como vacía
-  const extras = usadas.filter(({ def }) => def.kind === 'extra').map(({ f }) => (f.zonaTxt || '').replace(/\s/g, '').toUpperCase())
-  const sinAgenteReal = sinAgente.filter((z) => !extras.includes(z))
-  // Avisos: zonas repetidas / móviles repetidos
-  const cams = usadas.map(({ f }) => f.cam).filter(Boolean)
+  const ms = dia.moviles.filter(movilUsado)
+  const porHora = Object.fromEntries(TURNOS.map((t) => [t, ms.filter((m) => m.hs === t && m.cam).map((m) => m.cam)]))
+  const cubiertas = new Set(ms.map((m) => tipoZona(m.zona)).filter((t) => t.tipo === 'num').map((t) => t.base))
+  const sinAgente = ZONAS_NUM.filter((z) => !cubiertas.has(z))
+  const cams = ms.map((m) => m.cam).filter(Boolean)
   const camsRepetidas = [...new Set(cams.filter((c, i) => cams.indexOf(c) !== i))]
-  const ids = usadas.flatMap(({ f }) => f.agentes.filter(Boolean))
+  const ids = ms.flatMap((m) => m.agentes.map((a) => a.id).filter(Boolean))
   const agentesRepetidos = [...new Set(ids.filter((c, i) => ids.indexOf(c) !== i))]
-  const sinHora = usadas.filter(({ f }) => !f.hs).map(({ def }) => def.label)
-  return { enCalle: cams.length, porHora, sinAgente: sinAgenteReal, camsRepetidas, agentesRepetidos, sinHora }
+  const sinZona = ms.filter((m) => !m.zona).map((m) => m.cam || '?')
+  const { sinLugar } = ubicar(dia)
+  return { enCalle: ms.length, porHora, sinAgente, camsRepetidas, agentesRepetidos, sinZona, sinLugar: sinLugar.map((m) => m.cam || '?') }
 }
 
-/** Texto del parte de WhatsApp para un turno */
+// ---------------------------------------------------------------------------
+// Parte de WhatsApp
+// ---------------------------------------------------------------------------
 export function parteWhatsApp(dia, padron, hs) {
   const ag = (id) => padron.find((a) => a.id === id)
-  const moviles = filasUsadas(dia).filter(({ f }) => f.hs === hs)
-  // Los supervisores van primero, como en los partes de ejemplo
-  moviles.sort((a, b) => (b.def.kind === 'sup') - (a.def.kind === 'sup'))
+  const moviles = dia.moviles.filter((m) => m.hs === hs && movilUsado(m))
   const otros = dia.otros.filter((o) => o.hs === hs && o.agente)
   const ausentes = dia.ausentes.filter((a) => a.hs === hs && a.agente)
   const recepcion = otros.filter((o) => o.tipo === 'RECEPCIÓN')
   const afectados = otros.filter((o) => o.tipo === 'AFECTADO')
 
-  const L = []
-  L.push('_*Dirección General de Operaciones al Cuerpo de Patrulla Vicente López*_', '')
-  L.push('*PARTE SALIDA DE MÓVILES*', '')
-  L.push(`*SUPERVISOR:* _*${dia.supervisor.toUpperCase()}*_`)
-  L.push(`*AUXILIAR:* _${dia.auxiliar.toUpperCase()}_`, '')
-  L.push(`*FECHA:* ${fechaLarga(dia.fecha)}`)
-  L.push('*HORARIO:* ', `${hora2(hs)} A ${finTurno(hs)} Hs`, '')
+  const T = []
+  T.push('_*Dirección General de Operaciones al Cuerpo de Patrulla Vicente López*_', '')
+  T.push('*PARTE SALIDA DE MÓVILES*', '')
+  T.push(`*SUPERVISOR:* _*${dia.supervisor.toUpperCase()}*_`)
+  T.push(`*AUXILIAR:* _${dia.auxiliar.toUpperCase()}_`, '')
+  T.push(`*FECHA:* ${fechaLarga(dia.fecha)}`)
+  T.push('*HORARIO:* ', `${hora2(hs)} A ${finTurno(hs)} Hs`, '')
 
-  let agentesEnMovil = 0
-  moviles.forEach(({ def, f }, i) => {
-    L.push(`${pad2(i + 1)}- *Movil ${f.cam || 'S/N'}/Zona ${zonaParte(def, f)}*`)
-    f.agentes.filter(Boolean).forEach((id) => {
-      const a = ag(id); agentesEnMovil++
-      L.push(`Agente: ${nombreCompleto(a)}`, `LP: ${a?.lp || 'S/N'}`)
+  let fp = 0
+  moviles.forEach((m, i) => {
+    T.push(`${pad2(i + 1)}- *Movil ${m.cam || 'S/N'}/Zona ${normZona(m.zona) || 'S/Z'}*`)
+    m.agentes.filter((x) => x.id).forEach((x) => {
+      const a = ag(x.id)
+      if (!esAdicional(x)) fp++
+      T.push(`Agente: ${nombreCompleto(a)}${x.nota ? ` (${x.nota})` : ''}`, `LP: ${a?.lp || 'S/N'}`)
     })
-    L.push(`Of.Policia: ${f.ppol || 'Sin personal'}`, '')
+    T.push(`Of.Policia: ${sinPersonal(m.ppol) ? 'Sin personal' : m.ppol}`, '')
   })
 
   if (recepcion.length) {
-    L.push('*RECEPCIÓN*')
-    recepcion.forEach((o) => { const a = ag(o.agente); L.push(`Agente: ${nombreCompleto(a)}`, `LP: ${a?.lp || 'S/N'}`) })
-    L.push('')
+    T.push('*RECEPCIÓN*')
+    recepcion.forEach((o) => { const a = ag(o.agente); T.push(`Agente: ${nombreCompleto(a)}`, `LP: ${a?.lp || 'S/N'}`) })
+    T.push('')
   }
-
   if (ausentes.length) {
-    L.push('*_AUSENTES_*', '')
-    ausentes.forEach((x, i) => {
-      const a = ag(x.agente)
-      L.push(`${i + 1}- Agente: ${nombreCompleto(a)}`, `LP: ${a?.lp || 'S/N'} (${x.motivo})`, '')
-    })
+    T.push('*_AUSENTES_*', '')
+    ausentes.forEach((x, i) => { const a = ag(x.agente); T.push(`${i + 1}- Agente: ${nombreCompleto(a)}`, `LP: ${a?.lp || 'S/N'} (${x.motivo})`, '') })
   }
-
-  L.push('*OBSERVACIONES:*', '')
+  T.push('*OBSERVACIONES:*', '')
   if (afectados.length) {
-    L.push('', '*Personal afectado a otro sector:*')
-    afectados.forEach((o) => { const a = ag(o.agente); L.push(`${nombreCompleto(a)} (LP: ${a?.lp || 'S/N'}) → ${o.destino}`) })
-  } else L.push('')
+    T.push('', '*Personal afectado a otro sector:*')
+    afectados.forEach((o) => { const a = ag(o.agente); T.push(`${nombreCompleto(a)} (LP: ${a?.lp || 'S/N'}) → ${o.destino}`) })
+  } else T.push('')
 
-  const fp = agentesEnMovil + otros.length
+  fp += otros.length
   const fa = ausentes.length
-  const policiales = moviles.filter(({ f }) => f.ppol).length
   const motivos = {}
   ausentes.forEach((x) => { motivos[x.motivo] = (motivos[x.motivo] || 0) + 1 })
-
-  L.push('', '               *_PARTE DIARIO:_*', '')
-  L.push(`*Dotaciones en Calle:* ${pad2(moviles.length)}`)
-  L.push(`*Zonas Cubiertas:* ${pad2(moviles.length)}`, '')
-  L.push('*SE CUMPLE ORDEN DE SERVICIO*', 'N°: ', '')
-  L.push(`*F.E*: ${pad2(fp + fa)}`, `*F.P*: ${pad2(fp)}`, `*F.A*: ${pad2(fa)}`, '')
-  Object.entries(motivos).forEach(([m, n]) => L.push(`*${m}*: ${pad2(n)}`))
-  L.push(`*Total personal Policial:* ${pad2(policiales)}`)
-  return L.join('\n')
+  T.push('', '               *_PARTE DIARIO:_*', '')
+  T.push(`*Dotaciones en Calle:* ${pad2(moviles.length)}`, `*Zonas Cubiertas:* ${pad2(moviles.length)}`, '')
+  T.push('*SE CUMPLE ORDEN DE SERVICIO*', 'N°: ', '')
+  T.push(`*F.E*: ${pad2(fp + fa)}`, `*F.P*: ${pad2(fp)}`, `*F.A*: ${pad2(fa)}`, '')
+  Object.entries(motivos).forEach(([mo, n]) => T.push(`*${mo}*: ${pad2(n)}`))
+  T.push(`*Total personal Policial:* ${pad2(moviles.filter((m) => !sinPersonal(m.ppol)).length)}`)
+  return T.join('\n')
 }
 
-/** Líneas automáticas de observaciones para la planilla PDF */
 const ABREV = { 'Carpeta médica': 'C. MÉD.', 'Vacaciones': 'VAC.', 'Ausente sin aviso': 'A.S.A.', 'Suspensión': 'SUSP.', 'Licencia': 'LIC.' }
 export function observacionesPdf(dia, padron) {
   const ag = (id) => padron.find((a) => a.id === id)
   const corto = (a) => a ? `${a.apellido} ${a.nombre ? a.nombre[0] + '.' : ''}`.trim() : '?'
+  const lp = (id) => ag(id)?.lp || 'S/N'
   const partes = []
   const aus = dia.ausentes.filter((x) => x.agente)
-  if (aus.length) partes.push('AUSENTES: ' + aus.map((x) => `${corto(ag(x.agente))} LP ${ag(x.agente)?.lp || 'S/N'} (${ABREV[x.motivo] || x.motivo.toUpperCase()})`).join(' - '))
+  if (aus.length) partes.push('AUSENTES: ' + aus.map((x) => `${corto(ag(x.agente))} LP ${lp(x.agente)} (${ABREV[x.motivo] || x.motivo.toUpperCase()})`).join(' - '))
   const af = dia.otros.filter((o) => o.agente && o.tipo === 'AFECTADO')
-  if (af.length) partes.push('AFECTADOS: ' + af.map((o) => `${corto(ag(o.agente))} LP ${ag(o.agente)?.lp || 'S/N'} > ${o.destino.toUpperCase()}`).join(' - '))
+  if (af.length) partes.push('AFECTADOS: ' + af.map((o) => `${corto(ag(o.agente))} LP ${lp(o.agente)} > ${o.destino.toUpperCase()}`).join(' - '))
   const rc = dia.otros.filter((o) => o.agente && o.tipo === 'RECEPCIÓN')
-  if (rc.length) partes.push('RECEPCIÓN: ' + rc.map((o) => `${corto(ag(o.agente))} LP ${ag(o.agente)?.lp || 'S/N'} (${o.hs} HS)`).join(' - '))
+  if (rc.length) partes.push('RECEPCIÓN: ' + rc.map((o) => `${corto(ag(o.agente))} LP ${lp(o.agente)} (${o.hs} HS)`).join(' - '))
+  const adic = dia.moviles.flatMap((m) => m.agentes.filter((x) => x.id && x.nota).map((x) => `${corto(ag(x.id))} (${x.nota.toUpperCase()}, MÓVIL ${m.cam})`))
+  if (adic.length) partes.push(adic.join(' - '))
   if (dia.obs.trim()) partes.push(dia.obs.trim())
   return partes
 }

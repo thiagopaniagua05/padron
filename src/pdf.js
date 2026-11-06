@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
-import { FILAS, TURNOS, fila, filasUsadas, resumen, observacionesPdf, fechaCorta } from './logic'
+import { TURNOS, ubicar, resumen, observacionesPdf, fechaCorta, tipoZona, sinPersonal } from './logic.js'
 
 // Coordenadas de la plantilla (puntos PDF, origen abajo a la izquierda, hoja carta 612x792)
 const ROW_Y = (i) => 792 - (98.64 + i * 14.6218) // centro vertical de cada fila
@@ -18,42 +18,43 @@ export async function generarPdf(dia, padron) {
   const reg = await doc.embedFont(StandardFonts.Helvetica)
 
   const texto = (s, x, y, { size = 7, font = bold, center = false, maxw } = {}) => {
-    s = String(s ?? '').replace(/[→›]/g, '>')
+    s = String(s ?? '').replace(/[→›]/g, '>').replace(/[^\x20-\x7E -ÿ]/g, '')
     if (!s) return
     while (maxw && font.widthOfTextAtSize(s, size) > maxw && size > 4.5) size -= 0.25
     const w = font.widthOfTextAtSize(s, size)
     page.drawText(s, { x: center ? x - w / 2 : x, y: y - size * 0.35, size, font, color: INK })
   }
 
-  // Si dos agentes del día comparten apellido, se agrega el nombre (ej. MEZA DIEGO / MEZA ERIKA)
+  // Nombre en la planilla: apellido (y nombre si hay dos agentes del día con el mismo apellido).
+  // Con dos agentes en el móvil: "VALLE - RAMIREZ"
   const ag = (id) => padron.find((a) => a.id === id)
-  const usados = filasUsadas(dia).flatMap(({ f }) => f.agentes.filter(Boolean)).map(ag).filter(Boolean)
-  const nombrePdf = (a) => usados.filter((u) => u.apellido === a.apellido).length > 1 ? `${a.apellido} ${a.nombre}` : a.apellido
-  const nombresFila = (def, f) => {
-    const as = f.agentes.filter(Boolean).map(ag).filter(Boolean)
-    let s = as.length > 1 ? as.map((a) => a.apellido).join(' - ') : as[0] ? nombrePdf(as[0]) : ''
-    if ((def.kind === 'ref' || def.kind === 'extra') && f.zonaTxt) s += ` (${f.zonaTxt.toUpperCase()})`
-    return s
+  const todos = dia.moviles.flatMap((m) => m.agentes.map((x) => ag(x.id)).filter(Boolean))
+  const nombrePdf = (a) => todos.filter((u) => u.apellido === a.apellido).length > 1 ? `${a.apellido} ${a.nombre}` : a.apellido
+  const nombres = (m) => {
+    const as = m.agentes.map((x) => ag(x.id)).filter(Boolean)
+    return as.length > 1 ? as.map((a) => a.apellido).join(' - ') : as[0] ? nombrePdf(as[0]) : ''
   }
+  const ppol = (m) => (sinPersonal(m.ppol) ? 'S/N' : m.ppol.toUpperCase())
 
-  // Filas que comparten la misma celda (no debería pasar, pero por si acaso)
-  for (const def of FILAS) {
-    const f = fila(dia, def.key)
-    const y = ROW_Y(def.pdfRow)
-    if (def.pdfSide === 'R') {
-      texto(nombresFila(def, f), COL.agR, y, { maxw: COL.agRw })
-      texto(f.cam, COL.camR, y, { center: true })
-      texto([f.hs && f.hs + ' HS', f.ppol].filter(Boolean).join(' - ').toUpperCase(), COL.ppR, y, { center: true, maxw: COL.ppRw })
-    } else if (def.side === 'L') {
-      texto(nombresFila(def, f), COL.agL, y, { maxw: COL.agLw })
-      texto(f.cam, COL.camL, y, { center: true })
-      texto(f.hs, COL.hsL, y, { center: true })
-      texto(f.ppol, COL.ppL, y, { center: true, maxw: COL.ppLw, size: 6 })
+  const { ubicados } = ubicar(dia)
+  for (const { lugar, m } of ubicados) {
+    const y = ROW_Y(lugar.fila)
+    const t = tipoZona(m.zona)
+    const det = t.tipo === 'ref' || t.tipo === 'qth' ? t.det : t.tipo === 'num' ? t.base : (t.det || t.base)
+    let nom = nombres(m)
+    if (lugar.conZona && det) nom += ` (${det})`
+    if (lugar.lado === 'L') {
+      texto(nom, COL.agL, y, { maxw: COL.agLw })
+      texto(m.cam, COL.camL, y, { center: true })
+      texto(m.hs, COL.hsL, y, { center: true })
+      texto(ppol(m), COL.ppL, y, { center: true, maxw: COL.ppLw, size: 6 })
     } else {
-      texto(nombresFila(def, f), COL.agR, y, { maxw: COL.agRw })
-      texto(f.cam, COL.camR, y, { center: true })
-      const pp = [f.zonas, f.ppol].filter(Boolean).join(' - ').toUpperCase()
-      texto(pp, COL.ppR, y, { center: true, maxw: COL.ppRw })
+      texto(nom, COL.agR, y, { maxw: COL.agRw })
+      texto(m.cam, COL.camR, y, { center: true })
+      const derecha = lugar.col === 'zonas'
+        ? [det, sinPersonal(m.ppol) ? '' : m.ppol].filter(Boolean).join(' - ')
+        : [m.hs && m.hs + ' HS', ppol(m)].filter(Boolean).join(' - ')
+      texto(derecha.toUpperCase(), COL.ppR, y, { center: true, maxw: COL.ppRw })
     }
   }
 
@@ -67,16 +68,14 @@ export async function generarPdf(dia, padron) {
 
   // Observaciones: 4 renglones. Achica la letra hasta que entre; si igual no entra, usa las filas libres de abajo.
   const MAX = COL.fullw
+  const todoObs = observacionesPdf(dia, padron).join(' | ')
   const partir = (size) => {
-    const out = []
-    for (const parte of [observacionesPdf(dia, padron).join(' | ')].filter(Boolean)) {
-      let actual = ''
-      for (const palabra of parte.split(' ')) {
-        const prueba = actual ? actual + ' ' + palabra : palabra
-        if (reg.widthOfTextAtSize(prueba, size) > MAX && actual) { out.push(actual); actual = palabra } else actual = prueba
-      }
-      if (actual) out.push(actual)
+    const out = []; let actual = ''
+    for (const palabra of todoObs.split(' ')) {
+      const prueba = actual ? actual + ' ' + palabra : palabra
+      if (reg.widthOfTextAtSize(prueba, size) > MAX && actual) { out.push(actual); actual = palabra } else actual = prueba
     }
+    if (actual) out.push(actual)
     return out
   }
   let SIZE = 6.5, lineas = partir(SIZE)

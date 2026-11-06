@@ -33,7 +33,7 @@ export default function Extras({ dia, set, padron, onNuevo }) {
           <AgentePicker value={x.agente} padron={padron} onNuevo={onNuevo} onChange={(agente) => u({ agente })} />
           <Hs value={x.hs} onChange={(hs) => u({ hs })} />
           <select value={x.motivo} onChange={(e) => u({ motivo: e.target.value })}>
-            {MOTIVOS.map((m) => <option key={m}>{m}</option>)}
+            {[...new Set([...MOTIVOS, x.motivo])].map((m) => <option key={m}>{m}</option>)}
           </select>
           <span />
         </>)} />
@@ -51,6 +51,16 @@ export default function Extras({ dia, set, padron, onNuevo }) {
           {x.tipo === 'AFECTADO' && <input value={x.destino} placeholder="Destino, ej. Destacamentos (La Paz)" onChange={(e) => u({ destino: e.target.value })} />}
           {x.tipo !== 'AFECTADO' && <span />}
         </>)} />
+
+      <section className="card">
+        <header><h3>Otros datos de la planilla</h3></header>
+        <div className="bloques sin-borde">
+          <label>Back-up<input value={dia.backup} onChange={(e) => set({ backup: e.target.value })} placeholder="ej. 56-58-59-68" /></label>
+          <label>Sin agentes<input value={dia.sinAgentes} onChange={(e) => set({ sinAgentes: e.target.value })} /></label>
+          <label>Móviles fuera de servicio<input value={dia.fueraServicio} onChange={(e) => set({ fueraServicio: e.target.value })} placeholder="ej. 45-46-55" /></label>
+          <label>Rotas<input value={dia.rotas} onChange={(e) => set({ rotas: e.target.value })} placeholder="-" /></label>
+        </div>
+      </section>
 
       <section className="card">
         <header><h3>Observaciones</h3></header>

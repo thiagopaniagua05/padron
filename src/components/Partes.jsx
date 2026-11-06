@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { TURNOS, parteWhatsApp, filasUsadas } from '../logic'
+import { TURNOS, parteWhatsApp, movilUsado } from '../logic'
 
 export default function Partes({ dia, padron }) {
   const [copiado, setCopiado] = useState('')
-  const turnos = TURNOS.filter((t) => filasUsadas(dia).some(({ f }) => f.hs === t) || dia.ausentes.some((a) => a.hs === t))
+  const turnos = TURNOS.filter((t) => dia.moviles.some((m) => m.hs === t && movilUsado(m)) || dia.ausentes.some((a) => a.hs === t))
 
   const copiar = async (t, txt) => {
     try { await navigator.clipboard.writeText(txt) } catch {
