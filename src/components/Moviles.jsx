@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import AgentePicker from './AgentePicker'
-import { TURNOS, ZONAS_OPC, CON_DETALLE, tipoZona, normZona, movilVacio, movilUsado } from '../logic'
+import { TURNOS, ZONAS_OPC, CON_DETALLE, tipoZona, normZona, movilVacio, movilUsado, coincideMovil } from '../logic'
 
 const finTurno = (t) => String((+t.split(':')[0] + 12) % 24).padStart(2, '0') + ':00'
 const hora = (t) => t.padStart(5, '0')
@@ -88,6 +88,13 @@ function Tarjeta({ m, padron, onNuevo, cambiar, borrar, hist, repetida, n }) {
 
 export default function Moviles({ dia, setDia, padron, onNuevo, hist, resumen }) {
   const [cerrados, setCerrados] = useState({})
+  const [busca, setBusca] = useState('')
+  // Los resultados se calculan al escribir la búsqueda y quedan fijos mientras editás
+  // (si cambiás la zona 10 por 15, la tarjeta no desaparece de la lista)
+  const encontrados = useMemo(
+    () => (busca.trim() ? dia.moviles.filter((m) => movilUsado(m) && coincideMovil(m, padron, busca)).map((m) => m.id) : null),
+    [busca, dia.moviles.length, dia.fecha], // eslint-disable-line react-hooks/exhaustive-deps
+  )
   const cambiar = (id, patch) => setDia((d) => ({ ...d, moviles: d.moviles.map((m) => (m.id === id ? { ...m, ...patch } : m)) }))
   const borrar = (id) => {
     const m = dia.moviles.find((x) => x.id === id)
@@ -100,8 +107,48 @@ export default function Moviles({ dia, setDia, padron, onNuevo, hist, resumen })
     setTimeout(() => document.getElementById('m-' + nuevo.id)?.querySelector('input')?.focus(), 50)
   }
 
+  // Al buscar, sube hasta el buscador para que los resultados queden a la vista
+  const caja = useRef()
+  useEffect(() => {
+    const el = caja.current; if (!el) return
+    const top = el.getBoundingClientRect().top + window.scrollY - 62
+    if (busca && window.scrollY > top) window.scrollTo({ top })
+  }, [encontrados]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const buscador = (
+    <div className="buscador">
+      <span className="lupa">🔍</span>
+      <input type="search" value={busca} onChange={(e) => setBusca(e.target.value)}
+        placeholder="Buscar: apellido, móvil o zona (ej. medina, 56, zona 10)" enterKeyHint="search" />
+      {busca && <button className="limpiar-busca" onClick={() => setBusca('')} aria-label="Borrar búsqueda">✕</button>}
+    </div>
+  )
+
+  if (encontrados) {
+    const ms = encontrados.map((id) => dia.moviles.find((m) => m.id === id)).filter(Boolean)
+    return (
+      <div className="turnos" ref={caja}>
+        {buscador}
+        <p className="resultado-busca">
+          {ms.length ? `${ms.length} ${ms.length === 1 ? 'móvil encontrado' : 'móviles encontrados'}` : 'No se encontró ningún móvil.'}
+          <button className="link" onClick={() => setBusca('')}>Ver todos</button>
+        </p>
+        <div className="lista-moviles">
+          {ms.map((m) => (
+            <div id={'m-' + m.id} key={m.id}>
+              <div className="turno-chip">Turno {hora(m.hs || '')}</div>
+              <Tarjeta m={m} n="" padron={padron} onNuevo={onNuevo} hist={hist}
+                cambiar={cambiar} borrar={borrar} repetida={resumen.camsRepetidas.includes(m.cam)} />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="turnos">
+    <div className="turnos" ref={caja}>
+      {buscador}
       {TURNOS.map((t) => {
         const ms = dia.moviles.filter((m) => m.hs === t)
         const cerrado = cerrados[t]

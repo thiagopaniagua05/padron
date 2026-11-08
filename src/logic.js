@@ -212,3 +212,39 @@ export function observacionesPdf(dia, padron) {
   if (dia.obs.trim()) partes.push(dia.obs.trim())
   return partes
 }
+
+// ---------------------------------------------------------------------------
+// Buscador de móviles: "medina", "56", "zona 10", "movil 56", "flavia medina cam 56 zona 10"
+// Todas las palabras tienen que coincidir con algo del móvil.
+// ---------------------------------------------------------------------------
+const CLAVE_ZONA = ['ZONA', 'Z']
+const CLAVE_MOVIL = ['MOVIL', 'MOVILES', 'CAM', 'CAMIONETA', 'M']
+export function coincideMovil(m, padron, q) {
+  const pal = norm(q).replace(/\//g, ' ').split(' ').filter(Boolean)
+  if (!pal.length) return true
+  const z = normZona(m.zona)
+  const zonaTokens = z.split(/[\s/]+/).filter(Boolean)
+  const ags = m.agentes.map((x) => padron.find((a) => a.id === x.id)).filter(Boolean)
+  const nombres = ags.flatMap((a) => norm(`${a.apellido} ${a.nombre}`).split(' '))
+  const lps = ags.map((a) => a.lp).filter(Boolean)
+  const textos = [...nombres, ...zonaTokens, ...norm(m.ppol).split(' ')].filter(Boolean)
+  const zonaIgual = (v) => z === v || z === v.replace(/BIS$/, '') + 'BIS' && v.endsWith('BIS') || zonaTokens.includes(v)
+
+  for (let i = 0; i < pal.length; i++) {
+    const p = pal[i], sig = pal[i + 1]
+    if (CLAVE_ZONA.includes(p) && sig) { // "zona 10", "zona 5 bis"
+      let v = sig; if (pal[i + 2] === 'BIS') { v += 'BIS'; i++ }
+      if (!zonaIgual(v)) return false
+      i++; continue
+    }
+    if (CLAVE_MOVIL.includes(p) && sig && /^\d+$/.test(sig)) { if (m.cam !== sig) return false; i++; continue }
+    if (/^\d+$/.test(p)) { // número suelto: móvil, zona o LP
+      if (m.cam === p || zonaIgual(p) || (p.length >= 3 && lps.some((lp) => lp.startsWith(p)))) continue
+      return false
+    }
+    if (p === 'BIS' && /BIS/.test(z)) continue
+    if (textos.some((t) => t.startsWith(p))) continue
+    return false
+  }
+  return true
+}

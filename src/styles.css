@@ -88,6 +88,15 @@ main { margin-top: 14px; }
 .agregar { width: 100%; margin-top: 10px; border: 2px dashed var(--celeste); color: var(--azul); font-weight: 700; background: #fff; min-height: 54px; }
 input.alerta { background: var(--alerta-bg); border-color: var(--alerta); }
 
+/* Buscador de móviles */
+.buscador { position: sticky; top: 58px; z-index: 15; display: flex; align-items: center; background: var(--fondo); padding: 4px 0 8px; }
+.buscador .lupa { position: absolute; left: 12px; font-size: 16px; pointer-events: none; }
+.buscador input { padding-left: 40px; padding-right: 44px; min-height: 52px; font-size: 17px; border: 2px solid var(--celeste); border-radius: 12px; }
+.buscador input::-webkit-search-cancel-button { display: none; }
+.limpiar-busca { position: absolute; right: 6px; border: 0; background: var(--celeste2); color: var(--tinta); border-radius: 50%; width: 36px; height: 36px; min-height: 0; padding: 0; font-weight: 700; }
+.resultado-busca { display: flex; justify-content: space-between; align-items: center; margin: 0; color: var(--gris); font-weight: 600; }
+.turno-chip { display: inline-block; background: var(--azul2); color: #fff; font-size: 13px; font-weight: 700; padding: 2px 10px; border-radius: 8px 8px 0 0; margin-left: 12px; }
+
 /* Buscador de agentes */
 .picker { position: relative; display: flex; align-items: center; }
 .picker input { padding-right: 34px; font-weight: 600; color: var(--tinta); }
